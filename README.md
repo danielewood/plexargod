@@ -15,7 +15,7 @@
 - If your already have cloudflared setup as a service, edit your service definition to make `plexargod` fully automatic.
 - Example:
 ```bash
-cat<'EOF'>/etc/systemd/system/cloudflared.service
+cat<<'EOF'>/etc/systemd/system/cloudflared.service
 [Unit]
 Description=Argo Tunnel
 After=network.target
