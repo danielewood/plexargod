@@ -25,6 +25,7 @@ TimeoutStartSec=0
 Type=notify
 ExecStart=/usr/local/bin/cloudflared --config /etc/cloudflared/config.yml --origincert /etc/cloudflared/cert.pem --no-autoupdate
 ExecStartPost=/usr/local/bin/plexargod
+Environment=RUN_BY_SYSTEMD=1
 Restart=on-failure
 RestartSec=5s
 
