@@ -1,11 +1,18 @@
 #! /bin/bash
+TERM=xterm
+
 if [[ $EUID -ne 0 ]]; then
-   echo "$(realpath $0) must be run as root"
+   echo "$0 must be run as root"
    exit 1
 fi
 
 plexargod_path="/etc/plexargod"
 plexargod_conf="${plexargod_path}/plexargod.conf"
+
+ArgoOriginDown=$(journalctl -t ${0##*/} -n20 | grep -oP 'msg="unable to connect to the origin[^}]+')
+if [ ${ArgoOriginDown} ]; then
+    systemd-cat -t ${0##*/} -p warning <<<"cloudflared was unable to contact the origin, is Plex running?"
+fi
 
 # If plexargod config directory does not exist, create it
 if [ ! -d ${plexargod_path} ]; then
@@ -32,7 +39,7 @@ if [ -z ${PlexServerURL} ]; then
         -e "\$aPlexServerURL=${PlexServerURL}" \
         -i ${plexargod_conf}
 else
-   echo "PlexServerURL=${PlexServerURL}"
+   echo "PlexServerURL = ${PlexServerURL}"
 fi
 
 if [ -z ${ArgoMetricsURL} ]; then
@@ -42,7 +49,7 @@ if [ -z ${ArgoMetricsURL} ]; then
         -e "\$aArgoMetricsURL=${ArgoMetricsURL}" \
         -i ${plexargod_conf}
 else
-   echo "ArgoMetricsURL=${ArgoMetricsURL}"
+   echo "ArgoMetricsURL = ${ArgoMetricsURL}"
 fi
 
 if [ -z ${XPlexProduct} ]; then
@@ -52,7 +59,7 @@ if [ -z ${XPlexProduct} ]; then
         -e "\$aXPlexProduct=${XPlexProduct}" \
         -i ${plexargod_conf}
 else
-    echo "XPlexProduct=${XPlexProduct}"
+    echo "XPlexProduct = ${XPlexProduct}"
 fi
 
 if [ -z ${XPlexClientIdentifier} ]; then
@@ -62,7 +69,7 @@ if [ -z ${XPlexClientIdentifier} ]; then
         -e "\$aXPlexClientIdentifier=${XPlexClientIdentifier}" \
         -i ${plexargod_conf}
 else
-    echo "XPlexClientIdentifier=${XPlexClientIdentifier}"
+    echo "XPlexClientIdentifier = ${XPlexClientIdentifier}"
 fi
 
 function Get-XPlexToken {
@@ -73,12 +80,13 @@ function Get-XPlexToken {
     PlexPinLink=$(grep -oP 'Location:\ \K.+' <<<${CURL_CONTENT} | tr -dc '[[:print:]]')
     PlexPinCode=$(grep -oP '\<code\>\K[A-Z0-9]{4}' <<<${CURL_CONTENT})
 
-    if [ -v PS1 ]; then
+    if [ ${RUN_BY_SYSTEMD} ]; then
         systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): You are running plexargod in non-interactive and you do not have a X-Plex-Token set in /etc/plexargod/plexargod.conf"
-        systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): Run $(realpath $0) in interactive mode, or go to https://plex.tv/link and enter the code ${PlexPinCode}"
+        systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): Run $0 in interactive mode, or go to https://plex.tv/link and enter the code ${PlexPinCode}"
+    else
+        echo "Go to $(tput setaf 2)https://plex.tv/link$(tput sgr 0) and enter $(tput setaf 2)${PlexPinCode}$(tput sgr 0)"
     fi
 
-    echo "Go to $(tput setaf 2)https://plex.tv/link$(tput sgr 0) and enter $(tput setaf 2)${PlexPinCode}$(tput sgr 0)"
     echo -n "Waiting for code entry on the Plex API.."
 
     declare -i i; i=0
@@ -104,7 +112,7 @@ function Get-XPlexToken {
     sed -e "/^XPlexToken=/ c\\XPlexToken\=${XPlexToken}" \
         -e "\$aXPlexToken=${XPlexToken}" \
         -i ${plexargod_conf}
-    echo "XPlexToken=${XPlexToken}"
+    echo "XPlexToken = ${XPlexToken}"
 }
 
 if [ -z ${XPlexToken} ]; then
@@ -129,10 +137,10 @@ fi
 
 function Get-ArgoURL {
     ArgoURL=$(curl -s "${ArgoMetricsURL}/metrics" | grep -oP 'userHostname="https://\K[^"]*\.trycloudflare\.com' | head -n1)
-    if [ $ArgoURL ]; then
-        systemd-cat -t cloudflared -p info <<<"$(printf '%s\n' "${0##*/}"): ArgoURL = ${ArgoURL}"
+    if [ "$ArgoURL" ]; then
+        echo "ArgoURL = ${ArgoURL}"
     else
-        systemd-cat -t cloudflared -p err <<<"$(printf '%s\n' "${0##*/}"): Failed to get ArgoURL from cloudflared"
+        echo "Failed to get ArgoURL from cloudflared"
         exit 1
     fi
 }
@@ -145,7 +153,6 @@ function Get-PlexServerPrefs {
         -H "X-Plex-Client-Identifier: ${XPlexClientIdentifier}" \
         -H "X-Plex-Token: ${XPlexToken}"
 }
-PlexServerProcessedMachineIdentifier=$(curl -s "${PlexServerURL}" -H "X-Plex-Token: ${XPlexToken}" | grep -oP 'machineIdentifier\=\"\K[^"]*')
 
 function Set-PlexServerPrefs {
     # add if/then for secure only switch later (if secure, "https://${ArgoURL}:443")
@@ -163,16 +170,25 @@ declare -i i; i=0
 while [[ "$ArgoURL" != "$PlexAPIcustomConnections" ]]
 do
     sleep 1
+    PlexServerProcessedMachineIdentifier=$(curl -s "${PlexServerURL}" -H "X-Plex-Token: ${XPlexToken}" | grep -oP 'machineIdentifier\=\"\K[^"]*')
+    if [ ! "${PlexServerProcessedMachineIdentifier}" ]; then
+       systemd-cat -t ${0##*/} -p err <<<"Plex Service instance did not return an identifier, is it down?"
+       echo "curl output for ${PlexServerURL}"
+       curl -vs "${PlexServerURL}" -H "X-Plex-Token: ${XPlexToken}"
+       exit 1
+    else
+        echo "PlexServerProcessedMachineIdentifier = ${PlexServerProcessedMachineIdentifier}"
+    fi
     PlexAPIcustomConnections=$(curl -s "https://plex.tv/api/resources?X-Plex-Token=${XPlexToken}" |
         sed -n "/${PlexServerProcessedMachineIdentifier}/{n;p;n;p;n;p;}" |
         grep -oP 'address="\K[^"]*\.trycloudflare\.com' |
         head -n1)
     if [ $i -ge 15 ]; then
-        systemd-cat -t cloudflared -p err <<<"$(printf '%s\n' "${0##*/}"): Plex API does not match cloudflared after 30 seconds."
+        systemd-cat -t ${0##*/} -p err <<<"Plex API does not match cloudflared after 30 seconds."
         exit 1
     fi
     i=i+1
 done
 
-systemd-cat -t cloudflared -p info <<<"$(printf '%s\n' "${0##*/}"): Plex API is updated with the current Argo Tunnel Address."
+echo "Plex API is updated with the current Argo Tunnel Address."
 exit 0
