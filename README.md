@@ -65,7 +65,11 @@ EOF"
 sudo cloudflared service install
 ```
 
-Next, update the service file with setting to use plexargod
+Next, update the service file with hooks for plexargod:
+```bash
+ExecStartPost=/usr/local/bin/plexargod
+Environment=RUN_BY_SYSTEMD=1
+```
 
 ```bash
 sudo bash -c "cat<<'EOF'>/etc/systemd/system/cloudflared.service
@@ -89,5 +93,3 @@ EOF"
 sudo systemctl daemon-reload
 sudo systemctl restart cloudflared
 ```
-
-
