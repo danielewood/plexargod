@@ -41,19 +41,23 @@ All Plex API endpoints require a valid X-Plex-Token (Header or Embedded in the U
 ## Remote Access Tunnel Setup
 
 - Have your Plex Media Server running and contactable by the plexargod machine.
-  - Test Connectivity (401 Unauthorized is expected since we are not passing a Token)
-    ```ubuntu@ubuntu20:~$ curl -s -I localhost:32400
-    HTTP/1.1 401 Unauthorized
-    X-Plex-Protocol: 1.0
-    Content-Length: 193
-    Content-Type: text/html
-    Connection: close
-    Cache-Control: no-cache
-    Date: Thu, 16 Apr 2020 19:15:58 GMT
-    ```
+- Test Connectivity (401 Unauthorized is expected since we are not passing a Token)
+
+  ```bash
+  ubuntu@ubuntu20:~$ curl -s -I localhost:32400
+  HTTP/1.1 401 Unauthorized
+  X-Plex-Protocol: 1.0
+  Content-Length: 193
+  Content-Type: text/html
+  Connection: close
+  Cache-Control: no-cache
+  Date: Thu, 16 Apr 2020 19:15:58 GMT
+  ```
+
 - Download and install [cloudflared](https://developers.cloudflare.com/argo-tunnel/downloads/) as a systemd service
     
   **NOTE:** If your Plex Media Server is not localhost to the cloudflared/plexargod process, change `localhost:32400` to `Plex_IP/Hostname:32400`
+  
   ```bash
   sudo curl -O https://bin.equinox.io/c/VdrWdbjqyF/cloudflared-stable-linux-amd64.deb
   sudo apt-get install ./cloudflared-stable-linux-amd64.deb
