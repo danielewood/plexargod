@@ -71,6 +71,7 @@ ExecStartPost=/usr/local/bin/plexargod
 Environment=RUN_BY_SYSTEMD=1
 ```
 
+Automated version:
 ```bash
 sudo bash -c "cat<<'EOF'>/etc/systemd/system/cloudflared.service
 [Unit]
