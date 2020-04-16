@@ -70,7 +70,7 @@ All Plex API endpoints require a valid X-Plex-Token (Header or Embedded in the U
   ```
 - Install plexargod to `/usr/local/bin/` (or adjust the path everywhere else in this guide)
   ```bash
-  sudo bash -c 'curl -s https://raw.githubusercontent.com/danielewood/plexargod/ master/plexargod > /usr/local/bin/plexargod'
+  sudo bash -c 'curl -s https://raw.githubusercontent.com/danielewood/plexargod/master/plexargod > /usr/local/bin/plexargod'
   sudo chmod 755 /usr/local/bin/plexargod
   ```
 
