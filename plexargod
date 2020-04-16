@@ -1,16 +1,19 @@
 #! /bin/bash
+#set -x
 if [[ $EUID -ne 0 ]]; then
-   echo "$0 must be run as root to touch the config files"
+   echo "$0 must be run as root to modify the config files"
    exit 1
 fi
 
-plexargod_path="/etc/plexargod"
-plexargod_conf="${plexargod_path}/plexargod.conf"
+### Variable Setup
+
+[ -z ${plexargod_path} ] && plexargod_path="/etc/plexargod"
+[ -z ${plexargod_conf} ] && plexargod_conf="${plexargod_path}/plexargod.conf"
 
 # Get Plex and Metrics addresses from cloudflared, otherwise we'll pull or set after we import the plexargod.conf
 if [ -f /etc/cloudflared/config.yml ]; then
-    PlexServerURL=$(grep -oP '^url: \Khttp[^$]+' /etc/cloudflared/config.yml)
-    ArgoMetrics=$(grep -oP '^metrics: \K[^$]+' /etc/cloudflared/config.yml)
+    [ -z ${PlexServerURL} ] && PlexServerURL=$(grep -oP '^url: \Khttp[^$]+' /etc/cloudflared/config.yml)
+    [ -z ${ArgoMetricsURL} ] && ArgoMetricsURL="http://$(grep -oP '^metrics: \K[^$]+' /etc/cloudflared/config.yml)"
 fi
 
 # give a warning if cloudflared cant open its port to Plex, it probably means that Plex isnt running or is unreachable
@@ -23,7 +26,7 @@ fi
 if [ ! -d ${plexargod_path} ]; then
     mkdir -p ${plexargod_path}
 else
-    echo "${plexargod_path} exists"
+    echo "Using config path of ${plexargod_path}"
 fi
 
 # If plexargod config exists
@@ -31,31 +34,22 @@ fi
 # else
 #   create the conf with a comment line at the top
 if [ -f ${plexargod_conf} ]; then
-    . ${plexargod_conf}
-    echo "Imported ${plexargod_conf}"
+    source ${plexargod_conf}
+    echo "Sourced ${plexargod_conf}"
 else
     echo "# ${plexargod_conf}" > ${plexargod_conf}
 fi
 
-# Set plexargod version string
+# if VARIABLE is empty/malformed, use defaults
 [ -z ${XPlexVersion} ] && XPlexVersion='20.04.15.1000'
 echo "XPlexVersion = ${XPlexVersion}"
 
-# Pull Plex/Matrix from the config, if its absent there and in the config.yml, use defaults
+# if VARIABLE is empty/malformed, use defaults
 [ -z ${PlexServerURL} ] && PlexServerURL='http://localhost:32400'
-echo "PlexServerURL = ${PlexServerURL}"
-[ ! -z ${ArgoMetrics} ] && ArgoMetricsURL="http://${ArgoMetrics}"
-[ -z ${ArgoMetricsURL} ] && ArgoMetricsURL='http://localhost:33400'
 echo "ArgoMetricsURL = ${ArgoMetricsURL}"
 
-# if VARIABLE is empty/malformed, set and overwrite it in the config
-if [ -z ${PlexServerURL} ]; then
-    echo 'Setting PlexServerURL'
-    PlexServerURL='http://localhost:32400'
-    sed -e "/^PlexServerURL=/ c\\PlexServerURL\=${PlexServerURL}" \
-        -e "\$aPlexServerURL=${PlexServerURL}" \
-        -i ${plexargod_conf}
-fi
+# if VARIABLE is empty/malformed, use defaults
+[ -z ${ArgoMetricsURL} ] && ArgoMetricsURL='http://localhost:33400'
 echo "PlexServerURL = ${PlexServerURL}"
 
 # if VARIABLE is empty/malformed, set and overwrite it in the config
@@ -78,17 +72,19 @@ if [ -z ${XPlexClientIdentifier} ]; then
 fi
 echo "XPlexClientIdentifier = ${XPlexClientIdentifier}"
 
+### Function Creation
+
 function Get-XPlexToken {
     CURL_CONTENT=$(curl -X "POST" -s -i "https://plex.tv/pins.xml" \
         -H "X-Plex-Version: ${XPlexVersion}" \
         -H "X-Plex-Product: ${XPlexProduct}" \
         -H "X-Plex-Client-Identifier: ${XPlexClientIdentifier}")
-    PlexPinLink=$(grep -oP 'Location:\ \K.+' <<<${CURL_CONTENT} | tr -dc '[[:print:]]')
+    PlexPinLink=$(grep -oP 'Location:\ \K.+' <<<${CURL_CONTENT} | tr -dc '[:print:]')
     PlexPinCode=$(grep -oP '\<code\>\K[A-Z0-9]{4}' <<<${CURL_CONTENT})
 
     if [ ${RUN_BY_SYSTEMD} ]; then
-        systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): You are running plexargod in non-interactive and you do not have a X-Plex-Token set in /etc/plexargod/plexargod.conf"
-        systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): Run $0 in interactive mode, or go to https://plex.tv/link and enter the code ${PlexPinCode}"
+        systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): You are running ${0##*/} in non-interactive and you do not have a X-Plex-Token set in ${plexargod_conf}"
+        systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): Run $0 in interactive mode, or go to https://plex.tv/link and enter ${PlexPinCode}"
     else
         echo "Go to $(tput setaf 2)https://plex.tv/link$(tput sgr 0) and enter $(tput setaf 2)${PlexPinCode}$(tput sgr 0)"
     fi
@@ -122,15 +118,13 @@ function Get-XPlexToken {
     echo "XPlexToken set in ${plexargod_conf}"
 }
 
-
 function Get-PlexUserInfo {
-    PlexUserInfo=$(curl -s -X "POST" "https://plex.tv/users/sign_in.json" \
+    curl -s -X "POST" "https://plex.tv/users/sign_in.json" \
         -H "X-Plex-Version: ${XPlexVersion}" \
         -H "X-Plex-Product: ${XPlexProduct}" \
         -H "X-Plex-Client-Identifier: ${XPlexClientIdentifier}" \
-        -H "X-Plex-Token: ${XPlexToken}")
+        -H "X-Plex-Token: ${XPlexToken}"
 }
-
 
 function Get-ArgoURL {
     ArgoURL=$(curl -s "${ArgoMetricsURL}/metrics" | grep -oP 'userHostname="https://\K[^"]*\.trycloudflare\.com' | head -n1)
@@ -186,8 +180,9 @@ function Validate-PlexAPIcustomConnections {
     done
 }
 
+### Execution Section
 
-[ -z ${XPlexToken} ] && Get-PlexToken
+[ -z ${XPlexToken} ] && Get-XPlexToken
 if [ "$(Get-PlexUserInfo)" == '{"error":"Invalid authentication token."}' ]; then
     echo "X-Plex-Token is invalid, requesting new token"
     Get-XPlexToken
