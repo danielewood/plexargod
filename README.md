@@ -34,7 +34,7 @@ All Plex API endpoints require a valid X-Plex-Token (Header or Embedded in the U
 
 - (fill in more later)
 
-    ![](plexargod-authorized-devices.png)
+![](plexargod-authorized-devices.png)
 
 - This published information can be seen for your server by going to `https://plex.tv/api/resources?X-Plex-Token=YOUR_API_TOKEN`
 
@@ -73,6 +73,7 @@ All Plex API endpoints require a valid X-Plex-Token (Header or Embedded in the U
 - Run `/usr/local/bin/plexargod` to perform initial setup
   - Open browser signed in to your Plex Account to https://plex.tv/link
   - Enter the four digit code in the console
+
   ![](plexargod-first-run.gif)
 
 - Update `cloudflared.service` with hooks for plexargod:
