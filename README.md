@@ -24,19 +24,26 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
 
 When you specify a custom connection URL in your Plex Media Server, it will publish that URL in the Plex API. This allows all your clients to discover alternative paths to your server. 
 
-There are four Plex API endpoints that are used to facilitate plexargod:
-All Plex API endpoints require a valid X-Plex-Token (Header or Embedded in the URL)
- - `${PlexServerURL}/:/prefs`
-   - `GET` to read the current preferences
-   - `PUT` to change any of the preferences
- - `${PlexServerURL}/`
-   - `GET` machineIdentifier
+Plex API endpoints that are used to facilitate plexargod:
+  - `https://plex.tv/pins.xml`
+    - Requires `X-Plex-Client-Identifier` (Header)
+    - `POST` returns Token URL and Code for 'https://plex.tv/link'
+  - `https://plex.tv/pins/123456789`
+    - Requires `X-Plex-Client-Identifier` (Header)
+    - `GET` returns null or X-Plex-Token, depending on if user has entered code.
+  - `${PlexServerURL}/:/prefs`
+    - Requires `X-Plex-Token` (Header or Embedded in the URL)
+    - `GET` to read the current preferences
+    - `PUT` to change any of the preferences
+  - `${PlexServerURL}/`
+    - Requires `X-Plex-Token` (Header or Embedded in the URL)
+    - `GET` to read the machineIdentifier that is used on plex.tv/api
+  - `https://plex.tv/api/resources`
+    - Requires `X-Plex-Token` (Header or Embedded in the URL)
+    - `GET` to read the current published connections URLs
 
-- (fill in more later)
-
+Once token is claimed, you will see it in your list of Authorized Devices.
 ![](plexargod-authorized-devices.png)
-
-- This published information can be seen for your server by going to `https://plex.tv/api/resources?X-Plex-Token=YOUR_API_TOKEN`
 
 ## Remote Access Tunnel Setup
 
