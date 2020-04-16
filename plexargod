@@ -1,14 +1,19 @@
 #! /bin/bash
-TERM=xterm
-
 if [[ $EUID -ne 0 ]]; then
-   echo "$0 must be run as root"
+   echo "$0 must be run as root to touch the config files"
    exit 1
 fi
 
 plexargod_path="/etc/plexargod"
 plexargod_conf="${plexargod_path}/plexargod.conf"
 
+# Get Plex and Metrics addresses from cloudflared, otherwise we'll pull or set after we import the plexargod.conf
+if [ -f /etc/cloudflared/config.yml ]; then
+    PlexServerURL=$(grep -oP '^url: \Khttp[^$]+' /etc/cloudflared/config.yml)
+    ArgoMetrics=$(grep -oP '^metrics: \K[^$]+' /etc/cloudflared/config.yml)
+fi
+
+# give a warning if cloudflared cant open its port to Plex, it probably means that Plex isnt running or is unreachable
 ArgoOriginDown=$(journalctl -t ${0##*/} -n20 | grep -oP 'msg="unable to connect to the origin[^}]+')
 if [ ${ArgoOriginDown} ]; then
     systemd-cat -t ${0##*/} -p warning <<<"cloudflared was unable to contact the origin, is Plex running?"
@@ -18,59 +23,60 @@ fi
 if [ ! -d ${plexargod_path} ]; then
     mkdir -p ${plexargod_path}
 else
-    echo "dir exists"
+    echo "${plexargod_path} exists"
 fi
 
-# If plexargod config exists, load variables from it.
-# else create the directory with a comment line at the top
+# If plexargod config exists
+#   load variables from it
+# else
+#   create the conf with a comment line at the top
 if [ -f ${plexargod_conf} ]; then
     . ${plexargod_conf}
-    echo Sourced "${plexargod_conf}"
+    echo "Imported ${plexargod_conf}"
 else
     echo "# ${plexargod_conf}" > ${plexargod_conf}
 fi
 
+# Set plexargod version string
 [ -z ${XPlexVersion} ] && XPlexVersion='20.04.15.1000'
+echo "XPlexVersion = ${XPlexVersion}"
 
+# Pull Plex/Matrix from the config, if its absent there and in the config.yml, use defaults
+[ -z ${PlexServerURL} ] && PlexServerURL='http://localhost:32400'
+echo "PlexServerURL = ${PlexServerURL}"
+[ ! -z ${ArgoMetrics} ] && ArgoMetricsURL="http://${ArgoMetrics}"
+[ -z ${ArgoMetricsURL} ] && ArgoMetricsURL='http://localhost:33400'
+echo "ArgoMetricsURL = ${ArgoMetricsURL}"
+
+# if VARIABLE is empty/malformed, set and overwrite it in the config
 if [ -z ${PlexServerURL} ]; then
     echo 'Setting PlexServerURL'
     PlexServerURL='http://localhost:32400'
     sed -e "/^PlexServerURL=/ c\\PlexServerURL\=${PlexServerURL}" \
         -e "\$aPlexServerURL=${PlexServerURL}" \
         -i ${plexargod_conf}
-else
-   echo "PlexServerURL = ${PlexServerURL}"
 fi
+echo "PlexServerURL = ${PlexServerURL}"
 
-if [ -z ${ArgoMetricsURL} ]; then
-    echo 'Setting ArgoMetricsURL'
-    ArgoMetricsURL='http://localhost:33400'
-    sed -e "/^ArgoMetricsURL=/ c\\ArgoMetricsURL\=${ArgoMetricsURL}" \
-        -e "\$aArgoMetricsURL=${ArgoMetricsURL}" \
-        -i ${plexargod_conf}
-else
-   echo "ArgoMetricsURL = ${ArgoMetricsURL}"
-fi
-
+# if VARIABLE is empty/malformed, set and overwrite it in the config
 if [ -z ${XPlexProduct} ]; then
     echo 'Setting XPlexProduct'
     XPlexProduct='plexargod'
     sed -e "/^XPlexProduct=/ c\\XPlexProduct\=${XPlexProduct}" \
         -e "\$aXPlexProduct=${XPlexProduct}" \
         -i ${plexargod_conf}
-else
-    echo "XPlexProduct = ${XPlexProduct}"
 fi
+echo "XPlexProduct = ${XPlexProduct}"
 
+# if VARIABLE is empty/malformed, set and overwrite it in the config
 if [ -z ${XPlexClientIdentifier} ]; then
     echo 'Setting XPlexClientIdentifier'
     XPlexClientIdentifier=$(cat /proc/sys/kernel/random/uuid)
     sed -e "/^XPlexClientIdentifier=/ c\\XPlexClientIdentifier=${XPlexClientIdentifier}" \
         -e "\$aXPlexClientIdentifier=${XPlexClientIdentifier}" \
         -i ${plexargod_conf}
-else
-    echo "XPlexClientIdentifier = ${XPlexClientIdentifier}"
 fi
+echo "XPlexClientIdentifier = ${XPlexClientIdentifier}"
 
 function Get-XPlexToken {
     CURL_CONTENT=$(curl -X "POST" -s -i "https://plex.tv/pins.xml" \
@@ -109,15 +115,13 @@ function Get-XPlexToken {
         i=i+1
     done
     echo ""
+    # overwrite XPlexToken in the config
     sed -e "/^XPlexToken=/ c\\XPlexToken\=${XPlexToken}" \
         -e "\$aXPlexToken=${XPlexToken}" \
         -i ${plexargod_conf}
-    echo "XPlexToken = ${XPlexToken}"
+    echo "XPlexToken set in ${plexargod_conf}"
 }
 
-if [ -z ${XPlexToken} ]; then
-        Get-XPlexToken
-fi
 
 function Get-PlexUserInfo {
     PlexUserInfo=$(curl -s -X "POST" "https://plex.tv/users/sign_in.json" \
@@ -126,14 +130,7 @@ function Get-PlexUserInfo {
         -H "X-Plex-Client-Identifier: ${XPlexClientIdentifier}" \
         -H "X-Plex-Token: ${XPlexToken}")
 }
-Get-PlexUserInfo
 
-if [ "${PlexUserInfo}" == '{"error":"Invalid authentication token."}' ]; then
-    echo "Invalid token, requesting new Token"
-    Get-XPlexToken
-else
-    echo "X-Plex-Token is valid"
-fi
 
 function Get-ArgoURL {
     ArgoURL=$(curl -s "${ArgoMetricsURL}/metrics" | grep -oP 'userHostname="https://\K[^"]*\.trycloudflare\.com' | head -n1)
@@ -144,7 +141,6 @@ function Get-ArgoURL {
         exit 1
     fi
 }
-Get-ArgoURL
 
 function Get-PlexServerPrefs {
     curl -s "${PlexServerURL}/:/prefs" \
@@ -163,32 +159,44 @@ function Set-PlexServerPrefs {
         -H "X-Plex-Client-Identifier: ${XPlexClientIdentifier}" \
         -H "X-Plex-Token: ${XPlexToken}"
 }
+
+function Validate-PlexAPIcustomConnections {
+    declare -i i; i=0
+    while [[ "$ArgoURL" != "$PlexAPIcustomConnections" ]]
+    do
+        PlexServerProcessedMachineIdentifier=$(curl -s "${PlexServerURL}" -H "X-Plex-Token: ${XPlexToken}" | grep -oP 'machineIdentifier\=\"\K[^"]*')
+        if [ ! "${PlexServerProcessedMachineIdentifier}" ]; then
+           systemd-cat -t ${0##*/} -p err <<<"Plex Server instance did not return an identifier, is it down?"
+           echo "curl output for ${PlexServerURL}"
+           curl -vs "${PlexServerURL}" -H "X-Plex-Token: ${XPlexToken}"
+           exit 1
+        else
+            echo "PlexServerProcessedMachineIdentifier = ${PlexServerProcessedMachineIdentifier}"
+        fi
+        PlexAPIcustomConnections=$(curl -s "https://plex.tv/api/resources?X-Plex-Token=${XPlexToken}" |
+            sed -n "/${PlexServerProcessedMachineIdentifier}/{n;p;n;p;n;p;}" |
+            grep -oP 'address="\K[^"]*\.trycloudflare\.com' |
+            head -n1)
+        if [ $i -ge 15 ]; then
+            systemd-cat -t ${0##*/} -p err <<<"Plex API does not match cloudflared URLs after 30 seconds."
+            exit 1
+        fi
+        i=i+1
+        sleep 2
+    done
+}
+
+
+[ -z ${XPlexToken} ] && Get-PlexToken
+if [ "$(Get-PlexUserInfo)" == '{"error":"Invalid authentication token."}' ]; then
+    echo "X-Plex-Token is invalid, requesting new token"
+    Get-XPlexToken
+else
+    echo "X-Plex-Token is valid"
+fi
+
+Get-ArgoURL
 Set-PlexServerPrefs
-
-
-declare -i i; i=0
-while [[ "$ArgoURL" != "$PlexAPIcustomConnections" ]]
-do
-    sleep 1
-    PlexServerProcessedMachineIdentifier=$(curl -s "${PlexServerURL}" -H "X-Plex-Token: ${XPlexToken}" | grep -oP 'machineIdentifier\=\"\K[^"]*')
-    if [ ! "${PlexServerProcessedMachineIdentifier}" ]; then
-       systemd-cat -t ${0##*/} -p err <<<"Plex Service instance did not return an identifier, is it down?"
-       echo "curl output for ${PlexServerURL}"
-       curl -vs "${PlexServerURL}" -H "X-Plex-Token: ${XPlexToken}"
-       exit 1
-    else
-        echo "PlexServerProcessedMachineIdentifier = ${PlexServerProcessedMachineIdentifier}"
-    fi
-    PlexAPIcustomConnections=$(curl -s "https://plex.tv/api/resources?X-Plex-Token=${XPlexToken}" |
-        sed -n "/${PlexServerProcessedMachineIdentifier}/{n;p;n;p;n;p;}" |
-        grep -oP 'address="\K[^"]*\.trycloudflare\.com' |
-        head -n1)
-    if [ $i -ge 15 ]; then
-        systemd-cat -t ${0##*/} -p err <<<"Plex API does not match cloudflared after 30 seconds."
-        exit 1
-    fi
-    i=i+1
-done
-
+Validate-PlexAPIcustomConnections
 echo "Plex API is updated with the current Argo Tunnel Address."
 exit 0
