@@ -1,5 +1,5 @@
 # plexargod
- A systemd script to update the Plex API to use the current cloudflared tunnel address for remote access
+ Plex Argo Daemon - A systemd script to update the Plex API to use the current cloudflared tunnel address for remote access
 
 # this is a work in progress
 ## setup - rough notes
