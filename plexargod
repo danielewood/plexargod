@@ -1,4 +1,5 @@
 #! /bin/bash
+#set -x
 if [[ $EUID -ne 0 ]]; then
    echo "$0 must be run as root to modify the config files"
    exit 1
@@ -78,12 +79,12 @@ function Get-XPlexToken {
         -H "X-Plex-Version: ${XPlexVersion}" \
         -H "X-Plex-Product: ${XPlexProduct}" \
         -H "X-Plex-Client-Identifier: ${XPlexClientIdentifier}")
-    PlexPinLink=$(grep -oP 'Location:\ \K.+' <<<${CURL_CONTENT} | tr -dc '[[:print:]]')
+    PlexPinLink=$(grep -oP 'Location:\ \K.+' <<<${CURL_CONTENT} | tr -dc '[:print:]')
     PlexPinCode=$(grep -oP '\<code\>\K[A-Z0-9]{4}' <<<${CURL_CONTENT})
 
     if [ ${RUN_BY_SYSTEMD} ]; then
-        systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): You are running plexargod in non-interactive and you do not have a X-Plex-Token set in /etc/plexargod/plexargod.conf"
-        systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): Run $0 in interactive mode, or go to https://plex.tv/link and enter the code ${PlexPinCode}"
+        systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): You are running ${0##*/} in non-interactive and you do not have a X-Plex-Token set in ${plexargod_conf}"
+        systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): Run $0 in interactive mode, or go to https://plex.tv/link and enter ${PlexPinCode}"
     else
         echo "Go to $(tput setaf 2)https://plex.tv/link$(tput sgr 0) and enter $(tput setaf 2)${PlexPinCode}$(tput sgr 0)"
     fi
@@ -118,11 +119,11 @@ function Get-XPlexToken {
 }
 
 function Get-PlexUserInfo {
-    PlexUserInfo=$(curl -s -X "POST" "https://plex.tv/users/sign_in.json" \
+    curl -s -X "POST" "https://plex.tv/users/sign_in.json" \
         -H "X-Plex-Version: ${XPlexVersion}" \
         -H "X-Plex-Product: ${XPlexProduct}" \
         -H "X-Plex-Client-Identifier: ${XPlexClientIdentifier}" \
-        -H "X-Plex-Token: ${XPlexToken}")
+        -H "X-Plex-Token: ${XPlexToken}"
 }
 
 function Get-ArgoURL {
