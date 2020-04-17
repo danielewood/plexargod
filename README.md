@@ -20,31 +20,6 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
  - No account or authentication requirements
  - Simplier setup with _much_ less overhead
 
-## Plex API Endpoints
-
-When you specify a custom connection URL in your Plex Media Server, it will publish that URL in the Plex API. This allows all your clients to discover alternative paths to your server. 
-
-Plex API endpoints that are used to facilitate plexargod:
-  - `https://plex.tv/pins.xml`
-    - Requires `X-Plex-Client-Identifier` (Header)
-    - `POST` returns Token URL and Code for 'https://plex.tv/link'
-  - `https://plex.tv/pins/123456789`
-    - Requires `X-Plex-Client-Identifier` (Header)
-    - `GET` returns null or X-Plex-Token, depending on if user has entered code.
-  - `${PlexServerURL}/:/prefs`
-    - Requires `X-Plex-Token` (Header or Embedded in the URL)
-    - `GET` to read the current preferences
-    - `PUT` to change any of the preferences
-  - `${PlexServerURL}/`
-    - Requires `X-Plex-Token` (Header or Embedded in the URL)
-    - `GET` to read the machineIdentifier that is used on plex.tv/api
-  - `https://plex.tv/api/resources`
-    - Requires `X-Plex-Token` (Header or Embedded in the URL)
-    - `GET` to read the current published connections URLs
-
-Once token is claimed, you will see it in your list of Authorized Devices.
-![](plexargod-authorized-devices.png)
-
 ## Remote Access Tunnel Setup
 
 - Have your Plex Media Server running and contactable by the plexargod machine.
@@ -117,3 +92,28 @@ Once token is claimed, you will see it in your list of Authorized Devices.
   sudo systemctl restart cloudflared
   ```
 - Done
+
+## Plex API Endpoints
+
+When you specify a custom connection URL in your Plex Media Server, it will publish that URL in the Plex API. This allows all your clients to discover alternative paths to your server. 
+
+Plex API endpoints that are used to facilitate plexargod:
+  - `https://plex.tv/pins.xml`
+    - Requires `X-Plex-Client-Identifier` (Header)
+    - `POST` returns Token URL and Code for 'https://plex.tv/link'
+  - `https://plex.tv/pins/123456789`
+    - Requires `X-Plex-Client-Identifier` (Header)
+    - `GET` returns null or X-Plex-Token, depending on if user has entered code.
+  - `${PlexServerURL}/:/prefs`
+    - Requires `X-Plex-Token` (Header or Embedded in the URL)
+    - `GET` to read the current preferences
+    - `PUT` to change any of the preferences
+  - `${PlexServerURL}/`
+    - Requires `X-Plex-Token` (Header or Embedded in the URL)
+    - `GET` to read the machineIdentifier that is used on plex.tv/api
+  - `https://plex.tv/api/resources`
+    - Requires `X-Plex-Token` (Header or Embedded in the URL)
+    - `GET` to read the current published connections URLs
+
+Once token is claimed, you will see it in your list of Authorized Devices.
+![](plexargod-authorized-devices.png)
