@@ -52,7 +52,7 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
   ```
 - Install plexargod to `/usr/local/bin/` (or adjust the path everywhere else in this guide)
   ```bash
-  sudo bash -c 'curl -s https://raw.githubusercontent.com/danielewood/plexargod/master/plexargod > /usr/local/bin/plexargod'
+  sudo bash -c 'curl -s https://raw.githubusercontent.com/danielewood/plexargod/master/plexargod.sh > /usr/local/bin/plexargod'
   sudo chmod 755 /usr/local/bin/plexargod
   ```
 
@@ -65,6 +65,7 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
 - Update `cloudflared.service` with hooks for plexargod:
   - Add these lines the `[Service]` section
   ```bash
+  ExecStartPre=/usr/local/bin/cloudflared update
   ExecStartPost=/usr/local/bin/plexargod
   Environment=RUN_BY_SYSTEMD=1
   ```
@@ -74,16 +75,17 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
   [Unit]
   Description=Argo Tunnel
   After=network.target
-  
+
   [Service]
   TimeoutStartSec=0
   Type=notify
+  ExecStartPre=/usr/local/bin/cloudflared update
   ExecStart=/usr/local/bin/cloudflared --config /etc/cloudflared/config.yml --origincert /etc/cloudflared/cert.pem --no-autoupdate
   ExecStartPost=/usr/local/bin/plexargod
   Environment=RUN_BY_SYSTEMD=1
   Restart=on-failure
   RestartSec=5s
-  
+
   [Install]
   WantedBy=multi-user.target
   EOF"

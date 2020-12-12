@@ -1,8 +1,21 @@
-#! /bin/bash
+#!/bin/bash
+
+plexargodVersion='20.12.21.1000'
+
 #set -x
 if [[ $EUID -ne 0 ]]; then
    echo "$0 must be run as root to modify the config files"
    exit 1
+fi
+
+if [ -f "$(which prlimit)" ]; then
+    LimitNOFILE=524288
+    # If the prlimit command is available, we'll use it to modify the cloudflared process to increase the maximum number of open files
+    #   This is because eventually cloudflared uses too many file handles and hangs,
+    #   the metricsWatchdog function will poll for this eventuality and cause the process to exit, systemd will the restart the process.
+    prlimit --nofile=${LimitNOFILE} --pid=$(pidof cloudflared) && systemd-cat -t ${0##*/} -p info <<<"cloudflared was successfully modified with a LimitNOFILE of ${LimitNOFILE}"
+    # check current limits with:
+    # sudo cat /proc/$(pidof cloudflared)/limits
 fi
 
 ### Variable Setup
@@ -17,7 +30,7 @@ if [ -f /etc/cloudflared/config.yml ]; then
 fi
 
 # give a warning if cloudflared cant open its port to Plex, it probably means that Plex isnt running or is unreachable
-ArgoOriginDown=$(journalctl -t ${0##*/} -n20 | grep -oP 'msg="unable to connect to the origin[^}]+')
+ArgoOriginDown=$(journalctl -t cloudflared -n20 | grep -oP 'msg="unable to connect to the origin[^}]+')
 if [ ${ArgoOriginDown} ]; then
     systemd-cat -t ${0##*/} -p warning <<<"cloudflared was unable to contact the origin, is Plex running?"
 fi
@@ -41,7 +54,7 @@ else
 fi
 
 # if VARIABLE is empty/malformed, use defaults
-[ -z ${XPlexVersion} ] && XPlexVersion='20.04.15.1000'
+[ -z ${XPlexVersion} ] && XPlexVersion="${plexargodVersion}"
 echo "XPlexVersion = ${XPlexVersion}"
 
 # if VARIABLE is empty/malformed, use defaults
@@ -127,7 +140,7 @@ function Get-PlexUserInfo {
 }
 
 function Get-ArgoURL {
-    ArgoURL=$(curl -s "${ArgoMetricsURL}/metrics" | grep -oP 'userHostname="https://\K[^"]*\.trycloudflare\.com' | head -n1)
+    ArgoURL=$(curl -s -m5 "${ArgoMetricsURL}/metrics" | grep -oP 'userHostname="https://\K[^"]*\.trycloudflare\.com' | head -n1)
     if [ "$ArgoURL" ]; then
         echo "ArgoURL = ${ArgoURL}"
     else
@@ -180,6 +193,18 @@ function Validate-PlexAPIcustomConnections {
     done
 }
 
+function metricsWatchdog() {
+    while(true); do
+        sleep 30
+        metricsStatus=$(curl -sv -m15 ${ArgoMetricsURL} 2>&1)
+        metricsReturnCode=$?
+        if [[ metricsReturnCode -ne 0 ]]; then
+           systemd-cat -t ${0##*/} -p emerg <<<"cloudflared metrics server was unresponsive: (curl return code = ${metricsReturnCode}); restarting "
+           exit $metricsReturnCode
+        fi
+    done
+}
+
 ### Execution Section
 
 [ -z ${XPlexToken} ] && Get-XPlexToken
@@ -194,4 +219,9 @@ Get-ArgoURL
 Set-PlexServerPrefs
 Validate-PlexAPIcustomConnections
 echo "Plex API is updated with the current Argo Tunnel Address."
+
+if [ ${RUN_BY_SYSTEMD} ]; then
+    metricsWatchdog
+fi
+
 exit 0
