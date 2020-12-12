@@ -1,4 +1,6 @@
-# plexargod
+[![CodeFactor](https://www.codefactor.io/repository/github/danielewood/plexargod/badge)](https://www.codefactor.io/repository/github/danielewood/plexargod)
+
+# plexargod 
 Plex Argo Daemon - A systemd script to update the Plex API to use the current cloudflared tunnel address for remote access
 
 ## Create a **free** Cloudflare Argo Tunnel to your Plex Media Server
