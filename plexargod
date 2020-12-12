@@ -54,7 +54,7 @@ else
 fi
 
 # if VARIABLE is empty/malformed, use defaults
-[ -z ${XPlexVersion} ] && XPlexVersion='20.04.15.1000'
+[ -z ${XPlexVersion} ] && XPlexVersion="${plexargodVersion}"
 echo "XPlexVersion = ${XPlexVersion}"
 
 # if VARIABLE is empty/malformed, use defaults
