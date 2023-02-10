@@ -1,6 +1,6 @@
 #!/bin/bash
 
-plexargodVersion='20.12.21.1000'
+plexargodVersion='23.02.10.1000'
 
 #set -x
 if [[ $EUID -ne 0 ]]; then
@@ -92,7 +92,7 @@ function Get-XPlexToken {
         -H "X-Plex-Version: ${XPlexVersion}" \
         -H "X-Plex-Product: ${XPlexProduct}" \
         -H "X-Plex-Client-Identifier: ${XPlexClientIdentifier}")
-    PlexPinLink=$(grep -oP 'Location:\ \K.+' <<<${CURL_CONTENT} | tr -dc '[:print:]')
+    PlexPinLink=$(grep -oP '^[Ll]ocation:\ \K.+' <<<${CURL_CONTENT} | tr -dc '[:print:]')
     PlexPinCode=$(grep -oP '\<code\>\K[A-Z0-9]{4}' <<<${CURL_CONTENT})
 
     if [ ${RUN_BY_SYSTEMD} ]; then

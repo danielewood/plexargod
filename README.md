@@ -43,8 +43,19 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
   **NOTE:** If your Plex Media Server is not localhost to the cloudflared/plexargod process, change `localhost:32400` to `Plex_IP/Hostname:32400`
   
   ```bash
-  sudo curl -O https://bin.equinox.io/c/VdrWdbjqyF/cloudflared-stable-linux-amd64.deb
-  sudo apt-get install ./cloudflared-stable-linux-amd64.deb
+  # set uarch for github releases below
+  if [ "$(uname -m)" == "x86_64" ]; then
+    uarchName=amd64
+  elif [ "$(uname -m)" == "aarch64" ]; then
+    uarchName=arm64
+  else
+    uarchName=$(uname -m)
+  fi
+
+  # install latest cloudflared
+  releaseUrl=$(curl --silent "https://api.github.com/repos/cloudflare/cloudflared/releases/latest" | jq --arg releaseName "cloudflared-linux-${uarchName}.deb" -r ".assets[] | select(.name == \$releaseName) | .browser_download_url")
+  curl --silent --location --output "/tmp//cloudflared-linux-${uarchName}.deb" "${releaseUrl}"
+  sudo apt-get install "/tmp/cloudflared-linux-${uarchName}.deb"
   
   sudo cloudflared service install 2> /dev/null
   sudo bash -c "cat<<'EOF'>/etc/cloudflared/config.yml
