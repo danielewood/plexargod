@@ -200,7 +200,7 @@ function metricsWatchdog() {
         metricsReturnCode=$?
         if [[ metricsReturnCode -ne 0 ]]; then
            systemd-cat -t ${0##*/} -p emerg <<<"cloudflared metrics server was unresponsive: (curl return code = ${metricsReturnCode}); restarting "
-           exit $metricsReturnCode
+           kill -9 $(pgrep -f cloudflared)
         fi
     done
 }
@@ -221,7 +221,7 @@ Validate-PlexAPIcustomConnections
 echo "Plex API is updated with the current Argo Tunnel Address."
 
 if [ ${RUN_BY_SYSTEMD} ]; then
-    metricsWatchdog
+    metricsWatchdog > /dev/null 2>&1 & disown
 fi
 
 exit 0
