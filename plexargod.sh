@@ -172,16 +172,19 @@ function Validate-PlexAPIcustomConnections {
     while [[ "$ArgoURL" != "$PlexAPIcustomConnections" ]]
     do
         PlexServerProcessedMachineIdentifier=$(curl -s "${PlexServerURL}" -H "X-Plex-Token: ${XPlexToken}" | grep -oP 'machineIdentifier\=\"\K[^"]*')
-        if [ ! "${PlexServerProcessedMachineIdentifier}" ]; then
-           systemd-cat -t ${0##*/} -p err <<<"Plex Server instance did not return an identifier, is it down?"
-           echo "curl output for ${PlexServerURL}"
-           curl -vs "${PlexServerURL}" -H "X-Plex-Token: ${XPlexToken}"
-           exit 1
+        if [ -z "${PlexServerProcessedMachineIdentifier}" ]; then
+            systemd-cat -t ${0##*/} -p err <<<"Plex Server instance did not return an identifier, is it down?"
+            echo "curl output for ${PlexServerURL}"
+            curl -vs "${PlexServerURL}" -H "X-Plex-Token: ${XPlexToken}"
+            exit 1
         else
             echo "PlexServerProcessedMachineIdentifier = ${PlexServerProcessedMachineIdentifier}"
         fi
-        PlexAPIcustomConnections=$(curl -s "https://plex.tv/api/resources?X-Plex-Token=${XPlexToken}" |
-            sed -n "/${PlexServerProcessedMachineIdentifier}/{n;p;n;p;n;p;}" |
+        # Extract the entire Device block for the machine identifier
+        device_block=$(curl -s "https://plex.tv/api/resources?X-Plex-Token=${XPlexToken}" |
+            sed -n '/clientIdentifier="'${PlexServerProcessedMachineIdentifier}'"/,/<\/Device>/p')
+        # Extract the Argo URL from the device block
+        PlexAPIcustomConnections=$(echo "$device_block" |
             grep -oP 'address="\K[^"]*\.trycloudflare\.com' |
             head -n1)
         if [ $i -ge 15 ]; then
