@@ -40,7 +40,7 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
 
 - Install [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
 
-  **NOTE:** If your Plex Media Server is not localhost to the cloudflared/plexargod process, change `localhost:32400` to `Plex_IP/Hostname:32400` in the systemd service below.
+  **NOTE:** If your Plex Media Server is not localhost to the cloudflared/plexargod process, change `localhost:32400` to `Plex_IP/Hostname:32400` in the systemd service after running `--install`.
 
   ```bash
   # Add Cloudflare GPG key and apt repository
@@ -49,42 +49,29 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
   echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
   sudo apt-get update && sudo apt-get install cloudflared
   ```
-- Install plexargod to `/usr/local/bin/` (or adjust the path everywhere else in this guide)
+- Install plexargod to `/usr/local/bin/`
   ```bash
   sudo bash -c 'curl -s https://raw.githubusercontent.com/danielewood/plexargod/master/plexargod.sh > /usr/local/bin/plexargod'
   sudo chmod 755 /usr/local/bin/plexargod
   ```
 
-- Run `/usr/local/bin/plexargod` to perform initial setup
+- Install the systemd service:
+  ```bash
+  sudo plexargod --install
+  ```
+
+- Run first-time setup to link your Plex account:
   - Open browser signed in to your Plex Account to https://plex.tv/link
-  - Enter the four digit code in the console
+  - Enter the four digit code shown in the console
+  ```bash
+  sudo plexargod --interactive
+  ```
 
   ![](plexargod-first-run.gif)
 
-- Create the `plexargod.service` systemd unit:
-
-  TryCloudflare quick tunnels don't need a config file, certificate, or Cloudflare account. The tunnel URL and metrics port are passed directly on the command line.
-
+- Start the service:
   ```bash
-  sudo bash -c "cat<<'EOF'>/etc/systemd/system/plexargod.service
-  [Unit]
-  Description=Plex Argo Daemon
-  After=network.target
-
-  [Service]
-  TimeoutStartSec=0
-  Type=notify
-  ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --url http://localhost:32400 --metrics localhost:33400
-  ExecStartPost=/usr/local/bin/plexargod
-  Restart=on-failure
-  RestartSec=5s
-
-  [Install]
-  WantedBy=multi-user.target
-  EOF"
-
-  sudo systemctl daemon-reload
-  sudo systemctl restart plexargod
+  sudo systemctl start plexargod
   ```
 - Done
 
