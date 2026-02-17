@@ -11,7 +11,8 @@ case "$1" in
             echo "$0 --install must be run as root"
             exit 1
         fi
-        cat <<'UNIT' > /etc/systemd/system/plexargod.service
+        PLEX_URL="${2:-http://localhost:32400}"
+        cat <<UNIT > /etc/systemd/system/plexargod.service
 [Unit]
 Description=Plex Argo Daemon
 After=network.target
@@ -19,7 +20,7 @@ After=network.target
 [Service]
 TimeoutStartSec=0
 Type=notify
-ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --url http://localhost:32400 --metrics localhost:33400
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --url ${PLEX_URL} --metrics localhost:33400
 ExecStartPost=/usr/local/bin/plexargod
 Restart=on-failure
 RestartSec=5s
@@ -35,13 +36,12 @@ UNIT
         ;;
 esac
 
-#set -x
 if [[ $EUID -ne 0 ]]; then
    echo "$0 must be run as root to modify the config files"
    exit 1
 fi
 
-if [ -f "$(which prlimit)" ] && pidof cloudflared >/dev/null 2>&1; then
+if command -v prlimit >/dev/null 2>&1 && pidof cloudflared >/dev/null 2>&1; then
     LimitNOFILE=524288
     # If the prlimit command is available, we'll use it to modify the cloudflared process to increase the maximum number of open files
     #   This is because eventually cloudflared uses too many file handles and hangs,
@@ -53,14 +53,17 @@ fi
 
 ### Variable Setup
 
+# Write a key=value pair to the config file (update if exists, append if not)
+conf_set() {
+    if grep -q "^$1=" "${plexargod_conf}" 2>/dev/null; then
+        sed -i "s|^$1=.*|$1=$2|" "${plexargod_conf}"
+    else
+        echo "$1=$2" >> "${plexargod_conf}"
+    fi
+}
+
 [ -z "${plexargod_path}" ] && plexargod_path="/etc/plexargod"
 [ -z "${plexargod_conf}" ] && plexargod_conf="${plexargod_path}/plexargod.conf"
-
-# Get Plex and Metrics addresses from cloudflared, otherwise we'll pull or set after we import the plexargod.conf
-if [ -f /etc/cloudflared/config.yml ]; then
-    [ -z "${PlexServerURL}" ] && PlexServerURL=$(grep -oP '^url: \Khttp[^$]+' /etc/cloudflared/config.yml)
-    [ -z "${ArgoMetricsURL}" ] && ArgoMetricsURL="http://$(grep -oP '^metrics: \K[^$]+' /etc/cloudflared/config.yml)"
-fi
 
 # give a warning if cloudflared cant open its port to Plex, it probably means that Plex isnt running or is unreachable
 ArgoOriginDown=$(journalctl -t cloudflared -n20 | grep -oP 'msg="unable to connect to the origin[^}]+')
@@ -103,9 +106,7 @@ echo "ArgoMetricsURL = ${ArgoMetricsURL}"
 if [ -z "${XPlexProduct}" ]; then
     echo 'Setting XPlexProduct'
     XPlexProduct='plexargod'
-    sed -e "/^XPlexProduct=/ c\\XPlexProduct\=${XPlexProduct}" \
-        -e "\$aXPlexProduct=${XPlexProduct}" \
-        -i "${plexargod_conf}"
+    conf_set XPlexProduct "${XPlexProduct}"
 fi
 echo "XPlexProduct = ${XPlexProduct}"
 
@@ -113,9 +114,7 @@ echo "XPlexProduct = ${XPlexProduct}"
 if [ -z "${XPlexClientIdentifier}" ]; then
     echo 'Setting XPlexClientIdentifier'
     XPlexClientIdentifier=$(cat /proc/sys/kernel/random/uuid)
-    sed -e "/^XPlexClientIdentifier=/ c\\XPlexClientIdentifier=${XPlexClientIdentifier}" \
-        -e "\$aXPlexClientIdentifier=${XPlexClientIdentifier}" \
-        -i "${plexargod_conf}"
+    conf_set XPlexClientIdentifier "${XPlexClientIdentifier}"
 fi
 echo "XPlexClientIdentifier = ${XPlexClientIdentifier}"
 
@@ -127,40 +126,37 @@ function Get-XPlexToken {
         exit 1
     fi
 
-    CURL_CONTENT=$(curl -X "POST" -s -i "https://plex.tv/pins.xml" \
-        -H "X-Plex-Version: ${XPlexVersion}" \
-        -H "X-Plex-Product: ${XPlexProduct}" \
-        -H "X-Plex-Client-Identifier: ${XPlexClientIdentifier}")
-    PlexPinLink=$(grep -oP '^[Ll]ocation:\ \K.+' <<<"${CURL_CONTENT}" | tr -dc '[:print:]')
-    PlexPinCode=$(grep -oP '\<code\>\K[A-Z0-9]{4}' <<<"${CURL_CONTENT}")
-
-    echo "Go to $(tput setaf 2)https://plex.tv/link$(tput sgr 0) and enter $(tput setaf 2)${PlexPinCode}$(tput sgr 0)"
-    echo -n "Waiting for code entry on the Plex API.."
-
-    declare -i i; i=0
-    unset XPlexToken
-    while [ -z "$XPlexToken" ]
-    do
-        echo -n '.'
-        sleep 2
-        XPlexToken=$(curl -X "GET" -s "${PlexPinLink}" \
+    while true; do
+        CURL_CONTENT=$(curl -X "POST" -s -i "https://plex.tv/pins.xml" \
             -H "X-Plex-Version: ${XPlexVersion}" \
             -H "X-Plex-Product: ${XPlexProduct}" \
-            -H "X-Plex-Client-Identifier: ${XPlexClientIdentifier}" |
-            grep -oP '\"auth_token":"\K[^",}]+')
+            -H "X-Plex-Client-Identifier: ${XPlexClientIdentifier}")
+        PlexPinLink=$(grep -oP '^[Ll]ocation:\ \K.+' <<<"${CURL_CONTENT}" | tr -dc '[:print:]')
+        PlexPinCode=$(grep -oP '\<code\>\K[A-Z0-9]{4}' <<<"${CURL_CONTENT}")
 
-        if [ $i -ge 120 ]; then
-            echo ""
-            echo "Code ${PlexPinCode} has expired after 4 minutes, generating new code."
-            Get-XPlexToken
+        echo "Go to $(tput setaf 2)https://plex.tv/link$(tput sgr 0) and enter $(tput setaf 2)${PlexPinCode}$(tput sgr 0)"
+        echo -n "Waiting for code entry on the Plex API.."
+
+        local i=0
+        unset XPlexToken
+        while [ -z "$XPlexToken" ] && [ $i -lt 120 ]; do
+            echo -n '.'
+            sleep 2
+            XPlexToken=$(curl -X "GET" -s "${PlexPinLink}" \
+                -H "X-Plex-Version: ${XPlexVersion}" \
+                -H "X-Plex-Product: ${XPlexProduct}" \
+                -H "X-Plex-Client-Identifier: ${XPlexClientIdentifier}" |
+                grep -oP '\"auth_token":"\K[^",}]+')
+            i=$((i + 1))
+        done
+        echo ""
+
+        if [ -n "$XPlexToken" ]; then
+            break
         fi
-        i=$((i + 1))
+        echo "Code ${PlexPinCode} has expired after 4 minutes, generating new code."
     done
-    echo ""
-    # overwrite XPlexToken in the config
-    sed -e "/^XPlexToken=/ c\\XPlexToken\=${XPlexToken}" \
-        -e "\$aXPlexToken=${XPlexToken}" \
-        -i "${plexargod_conf}"
+    conf_set XPlexToken "${XPlexToken}"
     echo "XPlexToken set in ${plexargod_conf}"
 }
 
@@ -233,9 +229,9 @@ function Validate-PlexAPIcustomConnections {
 function metricsWatchdog() {
     while true; do
         sleep 30
-        curl -sv -m15 "${ArgoMetricsURL}" 2>&1
+        curl -s -m15 "${ArgoMetricsURL}" >/dev/null 2>&1
         metricsReturnCode=$?
-        if [[ metricsReturnCode -ne 0 ]]; then
+        if [[ $metricsReturnCode -ne 0 ]]; then
            systemd-cat -t "${0##*/}" -p emerg <<<"cloudflared metrics server was unresponsive: (curl return code = ${metricsReturnCode}); restarting "
            kill -9 "$(pgrep -f cloudflared)"
         fi
