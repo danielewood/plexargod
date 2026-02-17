@@ -49,7 +49,7 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
   ```
 - Install plexargod to `/usr/local/bin/`
   ```bash
-  sudo bash -c 'curl -s https://raw.githubusercontent.com/danielewood/plexargod/master/plexargod.sh > /usr/local/bin/plexargod'
+  sudo bash -c 'curl -s https://raw.githubusercontent.com/danielewood/plexargod/main/plexargod.sh > /usr/local/bin/plexargod'
   sudo chmod 755 /usr/local/bin/plexargod
   ```
 
