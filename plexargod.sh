@@ -12,7 +12,7 @@ case "$1" in
             exit 1
         fi
         INSTALL_PATH="/usr/local/bin/plexargod"
-        if [ ! -f "${INSTALL_PATH}" ] || [ "$(readlink -f "$0" 2>/dev/null)" != "$(readlink -f "${INSTALL_PATH}" 2>/dev/null)" ]; then
+        if [ ! -f "${INSTALL_PATH}" ]; then
             curl -fsSL "https://raw.githubusercontent.com/danielewood/plexargod/main/plexargod.sh" -o "${INSTALL_PATH}"
             chmod 755 "${INSTALL_PATH}"
             echo "Installed plexargod to ${INSTALL_PATH}"
