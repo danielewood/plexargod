@@ -3,7 +3,37 @@
 plexargodVersion='0.1.0'
 INTERACTIVE=false
 [ -t 0 ] && INTERACTIVE=true
-[[ "$1" == "--interactive" ]] && INTERACTIVE=true
+
+case "$1" in
+    --interactive) INTERACTIVE=true ;;
+    --install)
+        if [[ $EUID -ne 0 ]]; then
+            echo "$0 --install must be run as root"
+            exit 1
+        fi
+        cat <<'UNIT' > /etc/systemd/system/plexargod.service
+[Unit]
+Description=Plex Argo Daemon
+After=network.target
+
+[Service]
+TimeoutStartSec=0
+Type=notify
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --url http://localhost:32400 --metrics localhost:33400
+ExecStartPost=/usr/local/bin/plexargod
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+        systemctl daemon-reload
+        systemctl enable plexargod
+        echo "plexargod.service installed and enabled."
+        echo "Run '$0 --interactive' to set up your Plex token, then 'systemctl start plexargod'."
+        exit 0
+        ;;
+esac
 
 #set -x
 if [[ $EUID -ne 0 ]]; then
