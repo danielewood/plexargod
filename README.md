@@ -55,6 +55,10 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
   ```bash
   curl -fsSL https://raw.githubusercontent.com/danielewood/plexargod/main/plexargod.sh | sudo bash -s -- --install http://192.168.1.50:32400
   ```
+  To recreate the systemd service locally (e.g. to change the Plex URL):
+  ```bash
+  sudo plexargod --install http://192.168.1.50:32400
+  ```
 
 - Run first-time setup to link your Plex account:
   - Open browser signed in to your Plex Account to https://plex.tv/link
