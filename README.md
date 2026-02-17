@@ -15,12 +15,12 @@ Read the [The Cloudflare Blog - A free Argo Tunnel for your next project](https:
 
 TL;DR - **Free TryCloudFlare** Argo Tunnel features:
  - Operate much like a Reverse SSH tunnel + nginx on a remote VPS
- - A golang cross-platform tunneling daemon ([cloudflared](https://developers.cloudflare.com/argo-tunnel/downloads/))
+ - A golang cross-platform tunneling daemon ([cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/))
  - Unique URLs per session (i.e. apple-bali-matters-local.trycloudflare.com)
  - Support for http:80 & https:443
  - Free to use and no bandwidth restrictions
  - No account or authentication requirements
- - Simplier setup with _much_ less overhead
+ - Simpler setup with _much_ less overhead
 
 ## Remote Access Tunnel Setup
 
@@ -38,73 +38,42 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
   Date: Thu, 16 Apr 2020 19:15:58 GMT
   ```
 
-- Download and install [cloudflared](https://developers.cloudflare.com/argo-tunnel/downloads/) as a systemd service
-    
-  **NOTE:** If your Plex Media Server is not localhost to the cloudflared/plexargod process, change `localhost:32400` to `Plex_IP/Hostname:32400`
-  
-  ```bash
-  # set uarch for github releases below
-  if [ "$(uname -m)" == "x86_64" ]; then
-    uarchName=amd64
-  elif [ "$(uname -m)" == "aarch64" ]; then
-    uarchName=arm64
-  else
-    uarchName=$(uname -m)
-  fi
+- Install [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
 
-  # install latest cloudflared
-  releaseUrl=$(curl --silent "https://api.github.com/repos/cloudflare/cloudflared/releases/latest" | jq --arg releaseName "cloudflared-linux-${uarchName}.deb" -r ".assets[] | select(.name == \$releaseName) | .browser_download_url")
-  curl --silent --location --output "/tmp//cloudflared-linux-${uarchName}.deb" "${releaseUrl}"
-  sudo apt-get install "/tmp/cloudflared-linux-${uarchName}.deb"
-  
-  sudo cloudflared service install 2> /dev/null
-  sudo bash -c "cat<<'EOF'>/etc/cloudflared/config.yml
-  url: http://localhost:32400
-  metrics: localhost:33400
-  EOF"
+  ```bash
+  # Add Cloudflare GPG key and apt repository
+  sudo mkdir -p --mode=0755 /usr/share/keyrings
+  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+  echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
+  sudo apt-get update && sudo apt-get install cloudflared
   ```
-- Install plexargod to `/usr/local/bin/` (or adjust the path everywhere else in this guide)
+- Install plexargod to `/usr/local/bin/`
   ```bash
   sudo bash -c 'curl -s https://raw.githubusercontent.com/danielewood/plexargod/master/plexargod.sh > /usr/local/bin/plexargod'
   sudo chmod 755 /usr/local/bin/plexargod
   ```
 
-- Run `/usr/local/bin/plexargod` to perform initial setup
+- Install the systemd service:
+  ```bash
+  sudo plexargod --install
+  ```
+  If your Plex Media Server is on a different host, pass the URL:
+  ```bash
+  sudo plexargod --install http://192.168.1.50:32400
+  ```
+
+- Run first-time setup to link your Plex account:
   - Open browser signed in to your Plex Account to https://plex.tv/link
-  - Enter the four digit code in the console
+  - Enter the four digit code shown in the console
+  ```bash
+  sudo plexargod --interactive
+  ```
 
   ![](plexargod-first-run.gif)
 
-- Update `cloudflared.service` with hooks for plexargod:
-  - Add these lines the `[Service]` section
+- Start the service:
   ```bash
-  ExecStartPre=/usr/local/bin/cloudflared update
-  ExecStartPost=/usr/local/bin/plexargod
-  Environment=RUN_BY_SYSTEMD=1
-  ```
-  - Automated version of adding lines
-  ```bash
-  sudo bash -c "cat<<'EOF'>/etc/systemd/system/cloudflared.service
-  [Unit]
-  Description=Argo Tunnel
-  After=network.target
-
-  [Service]
-  TimeoutStartSec=0
-  Type=notify
-  ExecStartPre=/usr/local/bin/cloudflared update
-  ExecStart=/usr/local/bin/cloudflared --config /etc/cloudflared/config.yml --origincert /etc/cloudflared/cert.pem --no-autoupdate
-  ExecStartPost=/usr/local/bin/plexargod
-  Environment=RUN_BY_SYSTEMD=1
-  Restart=on-failure
-  RestartSec=5s
-
-  [Install]
-  WantedBy=multi-user.target
-  EOF"
-  
-  sudo systemctl daemon-reload
-  sudo systemctl restart cloudflared
+  sudo systemctl start plexargod
   ```
 - Done
 
