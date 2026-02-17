@@ -1,6 +1,6 @@
 #!/bin/bash
 
-plexargodVersion='23.02.10.1000'
+plexargodVersion='0.1.0'
 
 #set -x
 if [[ $EUID -ne 0 ]]; then
@@ -59,11 +59,11 @@ echo "XPlexVersion = ${XPlexVersion}"
 
 # if VARIABLE is empty/malformed, use defaults
 [ -z ${PlexServerURL} ] && PlexServerURL='http://localhost:32400'
-echo "ArgoMetricsURL = ${ArgoMetricsURL}"
+echo "PlexServerURL = ${PlexServerURL}"
 
 # if VARIABLE is empty/malformed, use defaults
 [ -z ${ArgoMetricsURL} ] && ArgoMetricsURL='http://localhost:33400'
-echo "PlexServerURL = ${PlexServerURL}"
+echo "ArgoMetricsURL = ${ArgoMetricsURL}"
 
 # if VARIABLE is empty/malformed, set and overwrite it in the config
 if [ -z ${XPlexProduct} ]; then
