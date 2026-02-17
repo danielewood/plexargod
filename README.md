@@ -47,19 +47,13 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
   echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
   sudo apt-get update && sudo apt-get install cloudflared
   ```
-- Install plexargod to `/usr/local/bin/`
+- Install plexargod and the systemd service:
   ```bash
-  sudo bash -c 'curl -s https://raw.githubusercontent.com/danielewood/plexargod/main/plexargod.sh > /usr/local/bin/plexargod'
-  sudo chmod 755 /usr/local/bin/plexargod
-  ```
-
-- Install the systemd service:
-  ```bash
-  sudo plexargod --install
+  curl -fsSL https://raw.githubusercontent.com/danielewood/plexargod/main/plexargod.sh | sudo bash -s -- --install
   ```
   If your Plex Media Server is on a different host, pass the URL:
   ```bash
-  sudo plexargod --install http://192.168.1.50:32400
+  curl -fsSL https://raw.githubusercontent.com/danielewood/plexargod/main/plexargod.sh | sudo bash -s -- --install http://192.168.1.50:32400
   ```
 
 - Run first-time setup to link your Plex account:

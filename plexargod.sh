@@ -11,6 +11,10 @@ case "$1" in
             echo "$0 --install must be run as root"
             exit 1
         fi
+        INSTALL_PATH="/usr/local/bin/plexargod"
+        curl -fsSL "https://raw.githubusercontent.com/danielewood/plexargod/main/plexargod.sh" -o "${INSTALL_PATH}"
+        chmod 755 "${INSTALL_PATH}"
+        echo "Installed plexargod to ${INSTALL_PATH}"
         PLEX_URL="${2:-http://localhost:32400}"
         cat <<UNIT > /etc/systemd/system/plexargod.service
 [Unit]
