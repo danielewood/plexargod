@@ -12,7 +12,7 @@ case "$1" in
             exit 1
         fi
         INSTALL_PATH="/usr/local/bin/plexargod"
-        if [ ! -f "${INSTALL_PATH}" ]; then
+        if [ "$(readlink -f "$0" 2>/dev/null)" != "${INSTALL_PATH}" ]; then
             curl -fsSL "https://raw.githubusercontent.com/danielewood/plexargod/main/plexargod.sh" -o "${INSTALL_PATH}"
             chmod 755 "${INSTALL_PATH}"
             echo "Installed plexargod to ${INSTALL_PATH}"
@@ -37,7 +37,7 @@ UNIT
         systemctl daemon-reload
         systemctl enable plexargod
         echo "plexargod.service installed and enabled."
-        echo "Run '$0 --interactive' to set up your Plex token, then 'systemctl start plexargod'."
+        echo "Run 'plexargod --interactive' to set up your Plex token, then 'systemctl start plexargod'."
         exit 0
         ;;
 esac
