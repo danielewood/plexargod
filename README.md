@@ -61,14 +61,14 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
 
   ![](plexargod-first-run.gif)
 
-- Create the `cloudflared.service` systemd unit with plexargod hooks:
+- Create the `plexargod.service` systemd unit:
 
   TryCloudflare quick tunnels don't need a config file, certificate, or Cloudflare account. The tunnel URL and metrics port are passed directly on the command line.
 
   ```bash
-  sudo bash -c "cat<<'EOF'>/etc/systemd/system/cloudflared.service
+  sudo bash -c "cat<<'EOF'>/etc/systemd/system/plexargod.service
   [Unit]
-  Description=Argo Tunnel
+  Description=Plex Argo Daemon
   After=network.target
 
   [Service]
@@ -76,7 +76,6 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
   Type=notify
   ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --url http://localhost:32400 --metrics localhost:33400
   ExecStartPost=/usr/local/bin/plexargod
-  Environment=RUN_BY_SYSTEMD=1
   Restart=on-failure
   RestartSec=5s
 
@@ -85,7 +84,7 @@ TL;DR - **Free TryCloudFlare** Argo Tunnel features:
   EOF"
 
   sudo systemctl daemon-reload
-  sudo systemctl restart cloudflared
+  sudo systemctl restart plexargod
   ```
 - Done
 

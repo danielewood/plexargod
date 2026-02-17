@@ -16,7 +16,7 @@
 | Issue | Title | Response |
 |-------|-------|----------|
 | #14 | Certs | TryCloudflare tunnels handle TLS transparently, no cert.pem needed |
-| #13 | How to restart tunnel? | `systemctl restart cloudflared` should work; if stuck, `systemctl stop cloudflared && sleep 2 && systemctl start cloudflared` |
+| #13 | How to restart tunnel? | `systemctl restart plexargod` should work; if stuck, `systemctl stop plexargod && sleep 2 && systemctl start plexargod` |
 | #8 | Regarding stats and cert.pem | cert.pem not needed for TryCloudflare; metrics available at configured metrics URL |
 
 ### Addressed by README update

@@ -1,6 +1,9 @@
 #!/bin/bash
 
 plexargodVersion='0.1.0'
+INTERACTIVE=false
+[ -t 0 ] && INTERACTIVE=true
+[[ "$1" == "--interactive" ]] && INTERACTIVE=true
 
 #set -x
 if [[ $EUID -ne 0 ]]; then
@@ -8,7 +11,7 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-if [ -f "$(which prlimit)" ]; then
+if [ -f "$(which prlimit)" ] && pidof cloudflared >/dev/null 2>&1; then
     LimitNOFILE=524288
     # If the prlimit command is available, we'll use it to modify the cloudflared process to increase the maximum number of open files
     #   This is because eventually cloudflared uses too many file handles and hangs,
@@ -88,6 +91,11 @@ echo "XPlexClientIdentifier = ${XPlexClientIdentifier}"
 ### Function Creation
 
 function Get-XPlexToken {
+    if ! $INTERACTIVE; then
+        systemd-cat -t ${0##*/} -p err <<<"No X-Plex-Token set in ${plexargod_conf}. Run '$0' interactively to perform first-time setup."
+        exit 1
+    fi
+
     CURL_CONTENT=$(curl -X "POST" -s -i "https://plex.tv/pins.xml" \
         -H "X-Plex-Version: ${XPlexVersion}" \
         -H "X-Plex-Product: ${XPlexProduct}" \
@@ -95,13 +103,7 @@ function Get-XPlexToken {
     PlexPinLink=$(grep -oP '^[Ll]ocation:\ \K.+' <<<${CURL_CONTENT} | tr -dc '[:print:]')
     PlexPinCode=$(grep -oP '\<code\>\K[A-Z0-9]{4}' <<<${CURL_CONTENT})
 
-    if [ ${RUN_BY_SYSTEMD} ]; then
-        systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): You are running ${0##*/} in non-interactive and you do not have a X-Plex-Token set in ${plexargod_conf}"
-        systemd-cat -t cloudflared -p emerg <<<"$(printf '%s\n' "${0##*/}"): Run $0 in interactive mode, or go to https://plex.tv/link and enter ${PlexPinCode}"
-    else
-        echo "Go to $(tput setaf 2)https://plex.tv/link$(tput sgr 0) and enter $(tput setaf 2)${PlexPinCode}$(tput sgr 0)"
-    fi
-
+    echo "Go to $(tput setaf 2)https://plex.tv/link$(tput sgr 0) and enter $(tput setaf 2)${PlexPinCode}$(tput sgr 0)"
     echo -n "Waiting for code entry on the Plex API.."
 
     declare -i i; i=0
@@ -218,12 +220,17 @@ else
     echo "X-Plex-Token is valid"
 fi
 
+if $INTERACTIVE; then
+    echo "Token setup complete. Start the plexargod service to activate the tunnel."
+    exit 0
+fi
+
 Get-ArgoURL
 Set-PlexServerPrefs
 Validate-PlexAPIcustomConnections
 echo "Plex API is updated with the current Argo Tunnel Address."
 
-if [ ${RUN_BY_SYSTEMD} ]; then
+if ! $INTERACTIVE; then
     metricsWatchdog > /dev/null 2>&1 & disown
 fi
 
