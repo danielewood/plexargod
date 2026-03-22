@@ -34,6 +34,15 @@ RestartSec=5s
 [Install]
 WantedBy=multi-user.target
 UNIT
+        mkdir -p /etc/plexargod
+        if [ ! -f /etc/plexargod/plexargod.conf ]; then
+            echo "# /etc/plexargod/plexargod.conf" > /etc/plexargod/plexargod.conf
+        fi
+        if grep -q "^PlexServerURL=" /etc/plexargod/plexargod.conf 2>/dev/null; then
+            sed -i "s|^PlexServerURL=.*|PlexServerURL=${PLEX_URL}|" /etc/plexargod/plexargod.conf
+        else
+            echo "PlexServerURL=${PLEX_URL}" >> /etc/plexargod/plexargod.conf
+        fi
         systemctl daemon-reload
         systemctl enable plexargod
         echo "plexargod.service installed and enabled."
