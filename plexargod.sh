@@ -3,6 +3,46 @@
 plexargodVersion='0.1.0'
 INTERACTIVE=false
 [ -t 0 ] && INTERACTIVE=true
+[ -z "${plexargod_path}" ] && plexargod_path="/etc/plexargod"
+[ -z "${plexargod_conf}" ] && plexargod_conf="${plexargod_path}/plexargod.conf"
+
+conf_init() {
+    mkdir -p "${plexargod_path}"
+    if [ ! -f "${plexargod_conf}" ]; then
+        printf '# %s\n' "${plexargod_conf}" > "${plexargod_conf}"
+    fi
+}
+
+# Config values are sourced by bash, so they must be written as shell-safe literals.
+conf_set() {
+    local key="$1"
+    local value="$2"
+    local quoted_value
+    local new_line
+    local tmp_conf
+    local updated=false
+
+    printf -v quoted_value '%q' "${value}"
+    new_line="${key}=${quoted_value}"
+    conf_init
+
+    if grep -q "^${key}=" "${plexargod_conf}" 2>/dev/null; then
+        tmp_conf=$(mktemp)
+        while IFS= read -r line || [ -n "${line}" ]; do
+            if [[ "${line}" == "${key}="* ]]; then
+                if ! ${updated}; then
+                    printf '%s\n' "${new_line}"
+                    updated=true
+                fi
+            else
+                printf '%s\n' "${line}"
+            fi
+        done < "${plexargod_conf}" > "${tmp_conf}"
+        mv "${tmp_conf}" "${plexargod_conf}"
+    else
+        printf '%s\n' "${new_line}" >> "${plexargod_conf}"
+    fi
+}
 
 case "$1" in
     --interactive) INTERACTIVE=true ;;
@@ -34,6 +74,7 @@ RestartSec=5s
 [Install]
 WantedBy=multi-user.target
 UNIT
+        conf_set PlexServerURL "${PLEX_URL}"
         systemctl daemon-reload
         systemctl enable plexargod
         echo "plexargod.service installed and enabled."
@@ -59,18 +100,6 @@ fi
 
 ### Variable Setup
 
-# Write a key=value pair to the config file (update if exists, append if not)
-conf_set() {
-    if grep -q "^$1=" "${plexargod_conf}" 2>/dev/null; then
-        sed -i "s|^$1=.*|$1=$2|" "${plexargod_conf}"
-    else
-        echo "$1=$2" >> "${plexargod_conf}"
-    fi
-}
-
-[ -z "${plexargod_path}" ] && plexargod_path="/etc/plexargod"
-[ -z "${plexargod_conf}" ] && plexargod_conf="${plexargod_path}/plexargod.conf"
-
 # give a warning if cloudflared cant open its port to Plex, it probably means that Plex isnt running or is unreachable
 ArgoOriginDown=$(journalctl -t cloudflared -n20 | grep -oP 'msg="unable to connect to the origin[^}]+')
 if [ "${ArgoOriginDown}" ]; then
@@ -93,7 +122,7 @@ if [ -f "${plexargod_conf}" ]; then
     source "${plexargod_conf}"
     echo "Sourced ${plexargod_conf}"
 else
-    echo "# ${plexargod_conf}" > "${plexargod_conf}"
+    conf_init
 fi
 
 # if VARIABLE is empty/malformed, use defaults
